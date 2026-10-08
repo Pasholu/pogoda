@@ -1594,6 +1594,80 @@ body::after {
   margin-top: 0;
 }
 
+/* --- Записи базы --- */
+
+.data-filters {
+  gap: 0.75rem 1.5rem;
+  padding: 0.75rem 1.5rem;
+}
+
+.data-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.data-filter__select {
+  height: 2.5rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.85);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.data-wrap {
+  margin-top: 1rem;
+  overflow: auto;
+  max-height: 70vh;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-panel);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* В окне станции первая колонка — заголовок строки; здесь все колонки равноправны. */
+.data-table thead th:first-child,
+.data-table td:first-child {
+  padding-left: 1.5rem;
+}
+
+.data-table td:last-child,
+.data-table thead th:last-child {
+  padding-right: 1.5rem;
+}
+
+.data-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin-top: 0.875rem;
+  padding-left: 0.875rem;
+}
+
+.data-pager .section__note {
+  margin-top: 0;
+}
+
+.data-pager__page {
+  align-self: center;
+  padding: 0 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.9375rem;
+}
+
+.segmented__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* --- Всплывающая подсказка --- */
 
 .viz-tip {

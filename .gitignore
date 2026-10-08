@@ -34,3 +34,6 @@ build/
 
 ### Claude Code ###
 .claude/
+
+### Секреты окружения ###
+.env

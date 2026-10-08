@@ -451,6 +451,7 @@ function methodMarkup() {
         Гербы областей — Викисклад;
         <a href="https://commons.wikimedia.org/wiki/File:Coat_of_arms_of_Mohilev_Oblast.svg" target="_blank" rel="noopener">герб Могилёвской области</a>
         — по лицензии CC BY-SA 4.0.</p>
+      <p class="section__note"><a href="/data.html">Записи базы</a> — все сводки и прогнозы, по которым посчитан отчёт.</p>
     </section>`
 }
 

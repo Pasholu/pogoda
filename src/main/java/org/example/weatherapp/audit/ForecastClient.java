@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -11,10 +12,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.ToDoubleFunction;
 import java.util.stream.Collectors;
 import org.example.weatherapp.audit.AuditCatalog.Model;
 import org.example.weatherapp.audit.AuditCatalog.Variable;
-import org.example.weatherapp.audit.ObservationClient.StationObservations;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -28,16 +30,25 @@ class ForecastClient {
 
     private static final String PREVIOUS_RUNS_URL = "https://previous-runs-api.open-meteo.com/v1/forecast";
 
+    record Point(double latitude, double longitude) {}
+
     record SeriesKey(String model, Variable variable, int horizonDays) {}
 
-    /** Прогнозные ряды одной станции; пропуски провайдера хранятся как NaN. */
+    /** Прогнозные ряды одной точки; пропуски провайдера хранятся как NaN. */
     record ForecastGrid(Map<Instant, Integer> hourIndex, Map<SeriesKey, double[]> series) {}
 
-    private final RestTemplate rest = new RestTemplate();
+    private final RestTemplate rest;
     private final ObjectMapper json = new ObjectMapper();
 
-    /** Возвращает сетки в том же порядке, что и станции на входе. */
-    List<ForecastGrid> fetch(List<StationObservations> stations, int pastDays) {
+    ForecastClient() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(15));
+        factory.setReadTimeout(Duration.ofSeconds(120));
+        this.rest = new RestTemplate(factory);
+    }
+
+    /** Возвращает сетки в том же порядке, что и точки на входе. */
+    List<ForecastGrid> fetch(List<Point> points, int pastDays) {
         List<String> hourly = new ArrayList<>();
         for (Variable variable : Variable.values()) {
             for (int days : AuditCatalog.HORIZON_DAYS) {
@@ -46,8 +57,8 @@ class ForecastClient {
         }
 
         URI uri = UriComponentsBuilder.fromUriString(PREVIOUS_RUNS_URL)
-                .queryParam("latitude", join(stations, StationObservations::latitude))
-                .queryParam("longitude", join(stations, StationObservations::longitude))
+                .queryParam("latitude", join(points, Point::latitude))
+                .queryParam("longitude", join(points, Point::longitude))
                 .queryParam("hourly", String.join(",", hourly))
                 .queryParam("models", AuditCatalog.MODELS.stream().map(Model::id).collect(Collectors.joining(",")))
                 .queryParam("past_days", pastDays)
@@ -102,10 +113,9 @@ class ForecastClient {
         return new ForecastGrid(hourIndex, series);
     }
 
-    private static String join(List<StationObservations> stations,
-                               java.util.function.ToDoubleFunction<StationObservations> coordinate) {
-        return stations.stream()
-                .map(station -> String.valueOf(coordinate.applyAsDouble(station)))
+    private static String join(List<Point> points, ToDoubleFunction<Point> coordinate) {
+        return points.stream()
+                .map(point -> String.valueOf(coordinate.applyAsDouble(point)))
                 .collect(Collectors.joining(","));
     }
 }

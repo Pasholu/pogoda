@@ -1,0 +1,41 @@
+# База данных проекта и, по желанию, само приложение.
+#
+#   docker compose up -d db                      — только база (приложение запускается из среды разработки)
+#   docker compose --profile full up -d --build  — база и приложение целиком, сайт на порту 8080
+#
+# Пароль ниже — для локальной разработки. На хостинге задайте свой в файле .env (см. .env.example).
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: forecastaudit
+      POSTGRES_USER: ${DB_USER:-forecast}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-forecast}
+    ports:
+      # 5434 снаружи: 5432 и 5433 часто заняты другими базами на машине разработчика.
+      - "5434:5432"
+    volumes:
+      - forecastaudit-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-forecast} -d forecastaudit"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    profiles: ["full"]
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/forecastaudit?reWriteBatchedInserts=true
+      DB_USER: ${DB_USER:-forecast}
+      DB_PASSWORD: ${DB_PASSWORD:-forecast}
+    ports:
+      - "8080:8080"
+
+volumes:
+  forecastaudit-data:
