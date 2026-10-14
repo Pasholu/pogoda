@@ -534,14 +534,24 @@ function methodMarkup() {
     </section>`
 }
 
+/** Пока прогнозы на выбранный срок не загружены, считать нечего — объясняем это вместо пустых графиков. */
+function emptyMarkup() {
+  return `
+    <section class="section">
+      <p class="section__note">
+        Для этого периода и срока прогноза пар прогноз–факт пока нет: прогнозы ещё загружаются в базу
+        или наблюдений за эти сроки не было. Обновите страницу через минуту или выберите другой срок.
+      </p>
+    </section>`
+}
+
 function render() {
   tips = []
+  const hasPairs = report.cells.some((cell) => cell.variable === variable && cell.horizon === horizon)
   root.innerHTML = `
     ${statsMarkup()}
     ${controlsMarkup()}
-    ${mapMarkup()}
-    ${heatmapMarkup()}
-    ${rankingMarkup()}
+    ${hasPairs ? `${mapMarkup()}${heatmapMarkup()}${rankingMarkup()}` : emptyMarkup()}
     ${stationsMarkup()}
     ${methodMarkup()}`
   lucide.createIcons()
