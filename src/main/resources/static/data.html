@@ -14,7 +14,7 @@
     />
     <link rel="stylesheet" href="/app.css" />
   </head>
-  <body>
+  <body class="data-page data-enter">
     <header class="topbar">
       <div class="topbar__inner topbar__inner--wide">
         <a class="brand" href="/" aria-label="ForecastAudit — на главную">
@@ -39,9 +39,9 @@
           </svg>
           <span class="topbar__title">ForecastAudit</span>
         </a>
-        <nav class="nav" aria-label="Разделы">
-          <a class="nav__link" href="/">Метеопост хозяйства</a>
-          <a class="nav__link" href="/audit.html">Аудит прогнозов</a>
+        <span class="db-badge" id="db-badge"><span class="db-badge__dot"></span><span id="db-badge-text">подключение…</span></span>
+        <nav class="nav" aria-label="Действия">
+          <a class="nav__link nav__link--active" href="/audit.html" id="db-back">← Назад к аудиту</a>
         </nav>
       </div>
     </header>

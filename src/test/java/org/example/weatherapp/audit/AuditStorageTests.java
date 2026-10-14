@@ -140,6 +140,79 @@ class AuditStorageTests {
         assertThat(AuditStore.browsable("flyway_schema_history")).isFalse();
     }
 
+    @Test
+    void periodLimitsWhichObservationsCount() {
+        Instant old = term.minus(10, ChronoUnit.DAYS);
+        when(observationClient.fetchReports(any(), any())).thenAnswer(call -> {
+            Station station = call.getArgument(0);
+            List<RawReport> reports = station.equals(BREST)
+                    ? List.of(new RawReport(term, Map.of(ObservationClient.TEMPERATURE, 10.0)),
+                            new RawReport(old, Map.of(ObservationClient.TEMPERATURE, 20.0)))
+                    : List.of();
+            return new StationFeed(52.1, 23.7, "https://example.test/" + station.wmo(), reports);
+        });
+        when(forecastClient.fetch(any(), anyInt()))
+                .thenReturn(List.of(new ForecastGrid(Map.of(term, 0, old, 1), constantSeries(12.0, 12.0))));
+        ingest.loadMissing(30 * 24);
+
+        assertThat(audit.report(7).totals().observations()).isEqualTo(1);
+        assertThat(audit.report(30).totals().observations()).isEqualTo(2);
+        assertThat(audit.report(0).totals().pairs()).isEqualTo(2L * forecastSeriesCount() / Variable.values().length);
+        // Неделя: ошибка только у свежего срока (12 − 10); месяц: ещё и у старого (12 − 20).
+        assertThat(temperatureMae(audit.report(7))).isEqualTo(2.0);
+        assertThat(temperatureMae(audit.report(30))).isEqualTo(5.0);
+    }
+
+    @Test
+    void aheadForecastsGetHorizonFromIssueDay() {
+        sourcesAnswer(10.0, 12.0);
+        ingest.loadMissing(168);
+        Instant issued = Instant.now().truncatedTo(ChronoUnit.DAYS);
+        Instant eightDays = issued.plus(7, ChronoUnit.DAYS).plus(3, ChronoUnit.HOURS);
+        Instant sevenDays = issued.plus(7, ChronoUnit.DAYS);
+        Map<ForecastClient.SeriesKey, double[]> series = new HashMap<>();
+        for (Model model : AuditCatalog.MODELS) {
+            for (Variable variable : Variable.values()) {
+                series.put(new SeriesKey(model.id(), variable, 0), new double[] {1.0, 2.0});
+            }
+        }
+        when(forecastClient.fetchAhead(any(), anyInt()))
+                .thenReturn(List.of(new ForecastGrid(Map.of(sevenDays, 0, eightDays, 1), series)));
+
+        ingest.ingestAheadForecasts();
+        ingest.ingestAheadForecasts();
+
+        int expected = AuditCatalog.MODELS.size() * Variable.values().length;
+        assertThat(jdbc.queryForObject("select count(*) from forecast where horizon_days = 8", Integer.class))
+                .isEqualTo(expected);
+        assertThat(jdbc.queryForObject("select count(*) from forecast where horizon_days > 8", Integer.class))
+                .isZero();
+        // Архивные горизонты 1–7 снимок не трогает.
+        assertThat(jdbc.queryForObject("select count(*) from forecast where horizon_days <= 7", Integer.class))
+                .isEqualTo(forecastSeriesCount());
+    }
+
+    private static double temperatureMae(AuditReport report) {
+        return report.cells().stream()
+                .filter(cell -> cell.region().equals(AuditCatalog.COUNTRY)
+                        && cell.variable().equals("temperature") && cell.horizon() == 24)
+                .findFirst()
+                .orElseThrow()
+                .mae();
+    }
+
+    private static Map<SeriesKey, double[]> constantSeries(double... values) {
+        Map<SeriesKey, double[]> series = new HashMap<>();
+        for (Model model : AuditCatalog.MODELS) {
+            for (Variable variable : Variable.values()) {
+                for (int days : AuditCatalog.HORIZON_DAYS) {
+                    series.put(new SeriesKey(model.id(), variable, days), values.clone());
+                }
+            }
+        }
+        return series;
+    }
+
     /** Брест передаёт одну сводку с заданной температурой; все модели дают один и тот же прогноз. */
     private void sourcesAnswer(double observedTemperature, double forecastTemperature) {
         when(observationClient.fetchReports(any(), any())).thenAnswer(call -> {

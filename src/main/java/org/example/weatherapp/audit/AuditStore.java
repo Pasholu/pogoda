@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import org.example.weatherapp.audit.AuditCatalog.Station;
 import org.example.weatherapp.audit.AuditCatalog.Variable;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -49,6 +48,15 @@ class AuditStore {
             String job, String startedAt, String finishedAt, String status, int rowsWritten, String message) {}
 
     record Coverage(long observations, long forecasts, String oldestObservation, String newestObservation) {}
+
+    /** Суммы ошибок одной клетки витрины: область × модель × параметр × горизонт. */
+    record ErrorSums(
+            String region, String model, Variable variable, int horizonDays,
+            long count, double absolute, double squared, double signed) {}
+
+    /** Сводки за период: сколько всего, сколько отброшено значений, сколько у каждой станции. */
+    record ObservationTotals(long observations, long rejectedValues, Map<String, Integer> byStation,
+                             Instant oldest, Instant newest) {}
 
     /** Страница таблицы для просмотра: имена колонок по порядку, строки и общее число строк под фильтром. */
     record TablePage(String table, List<String> columns, List<Map<String, Object>> rows, long total) {}
@@ -151,8 +159,11 @@ class AuditStore {
         Instant to = rows.stream().map(ForecastRow::target).max(Instant::compareTo).orElseThrow();
         OffsetDateTime loadedAt = OffsetDateTime.now(ZoneOffset.UTC);
         transaction.executeWithoutResult(status -> {
-            jdbc.update("delete from forecast where station_wmo = ? and target_time >= ? and target_time <= ?",
-                    wmo, utc(from), utc(to));
+            // Только горизонты архива: прогнозы на 8–16 суток в те же сроки сохранены отдельно.
+            jdbc.update("""
+                    delete from forecast where station_wmo = ? and target_time >= ? and target_time <= ?
+                    and horizon_days <= ?""",
+                    wmo, utc(from), utc(to), AuditCatalog.HORIZON_DAYS.get(AuditCatalog.HORIZON_DAYS.size() - 1));
             jdbc.batchUpdate("""
                     insert into forecast (station_wmo, model, variable, horizon_days, target_time,
                         issued_time, forecast_value, loaded_at)
@@ -170,10 +181,108 @@ class AuditStore {
         });
     }
 
-    /** Сводки всех станций не старше since. */
-    List<ObservationRow> observations(Instant since) {
-        return jdbc.query("select * from observation where report_time >= ?",
-                (rs, row) -> observationRow(rs), utc(since));
+    /**
+     * Сохраняет прогноз станции на 8–16 суток, выпущенный в issued. Повторное сохранение того же
+     * выпуска заменяет его строки; выпуски других дней не трогает.
+     */
+    void replaceAheadForecasts(String wmo, Instant issued, List<ForecastRow> rows) {
+        if (rows.isEmpty()) {
+            return;
+        }
+        OffsetDateTime loadedAt = OffsetDateTime.now(ZoneOffset.UTC);
+        transaction.executeWithoutResult(status -> {
+            jdbc.update("delete from forecast where station_wmo = ? and issued_time = ? and horizon_days >= ?",
+                    wmo, utc(issued), AuditCatalog.FIRST_AHEAD_HORIZON);
+            jdbc.batchUpdate("""
+                    insert into forecast (station_wmo, model, variable, horizon_days, target_time,
+                        issued_time, forecast_value, loaded_at)
+                    values (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    rows, BATCH_SIZE, (statement, row) -> {
+                        statement.setString(1, row.wmo());
+                        statement.setString(2, row.model());
+                        statement.setString(3, row.variable().name());
+                        statement.setInt(4, row.horizonDays());
+                        statement.setObject(5, utc(row.target()));
+                        statement.setObject(6, utc(issued));
+                        statement.setDouble(7, row.value());
+                        statement.setObject(8, loadedAt);
+                    });
+        });
+    }
+
+    /** Есть ли уже сохранённый выпуск прогнозов на 8–16 суток за этот момент. */
+    boolean hasAheadIssue(Instant issued) {
+        Integer rows = jdbc.queryForObject(
+                "select count(*) from forecast where issued_time = ? and horizon_days >= ?",
+                Integer.class, utc(issued), AuditCatalog.FIRST_AHEAD_HORIZON);
+        return rows != null && rows > 0;
+    }
+
+    /**
+     * Ошибки прогнозов по областям, моделям, параметрам и горизонтам за сроки не раньше since.
+     * Пары прогноз–факт склеиваются и суммируются в самой базе; значения факта за физическими
+     * пределами параметра в расчёт не идут.
+     */
+    List<ErrorSums> errorSums(Instant since) {
+        StringBuilder facts = new StringBuilder();
+        for (Variable variable : Variable.values()) {
+            if (!facts.isEmpty()) {
+                facts.append(" union all ");
+            }
+            // Имена колонок и пределы берутся из перечисления, а не из запроса посетителя.
+            facts.append("select station_wmo, report_time, '").append(variable.name()).append("' as variable, ")
+                    .append(variable.observationColumn).append(" as actual from observation where report_time >= ? and ")
+                    .append(variable.observationColumn).append(" between ").append(variable.min)
+                    .append(" and ").append(variable.max);
+        }
+        String sql = """
+                select s.region, f.model, f.variable, f.horizon_days, count(*) as n,
+                       sum(abs(f.forecast_value - x.actual)) as absolute,
+                       sum((f.forecast_value - x.actual) * (f.forecast_value - x.actual)) as squared,
+                       sum(f.forecast_value - x.actual) as signed
+                from forecast f
+                join (%s) x on x.station_wmo = f.station_wmo and x.report_time = f.target_time
+                           and x.variable = f.variable
+                join station s on s.wmo = f.station_wmo
+                where f.target_time >= ?
+                group by s.region, f.model, f.variable, f.horizon_days""".formatted(facts);
+        Object[] arguments = new Object[Variable.values().length + 1];
+        java.util.Arrays.fill(arguments, utc(since));
+        return jdbc.query(sql, (rs, row) -> new ErrorSums(
+                rs.getString("region"),
+                rs.getString("model"),
+                Variable.valueOf(rs.getString("variable")),
+                rs.getInt("horizon_days"),
+                rs.getLong("n"),
+                rs.getDouble("absolute"),
+                rs.getDouble("squared"),
+                rs.getDouble("signed")), arguments);
+    }
+
+    ObservationTotals observationTotals(Instant since) {
+        Map<String, Integer> byStation = new LinkedHashMap<>();
+        long[] totals = {0, 0};
+        Instant[] range = {null, null};
+        jdbc.query("""
+                select station_wmo, count(*) as n, sum(rejected_values) as rejected,
+                       min(report_time) as oldest, max(report_time) as newest
+                from observation where report_time >= ? group by station_wmo""",
+                rs -> {
+                    int n = rs.getInt("n");
+                    byStation.put(rs.getString("station_wmo"), n);
+                    totals[0] += n;
+                    totals[1] += rs.getLong("rejected");
+                    Instant oldest = instant(rs, "oldest");
+                    Instant newest = instant(rs, "newest");
+                    if (range[0] == null || oldest.isBefore(range[0])) {
+                        range[0] = oldest;
+                    }
+                    if (range[1] == null || newest.isAfter(range[1])) {
+                        range[1] = newest;
+                    }
+                },
+                utc(since));
+        return new ObservationTotals(totals[0], totals[1], byStation, range[0], range[1]);
     }
 
     /** Сводки одной станции не старше since, от новых к старым. */
@@ -181,23 +290,6 @@ class AuditStore {
         return jdbc.query(
                 "select * from observation where station_wmo = ? and report_time >= ? order by report_time desc",
                 (rs, row) -> observationRow(rs), wmo, utc(since));
-    }
-
-    /** Отдаёт прогнозы не старше since по одному, не собирая их в список. */
-    void forEachForecast(Instant since, Consumer<ForecastRow> consumer) {
-        jdbc.query("""
-                select station_wmo, model, variable, horizon_days, target_time, forecast_value
-                from forecast where target_time >= ?""",
-                rs -> {
-                    consumer.accept(new ForecastRow(
-                            rs.getString("station_wmo"),
-                            rs.getString("model"),
-                            Variable.valueOf(rs.getString("variable")),
-                            rs.getInt("horizon_days"),
-                            instant(rs, "target_time"),
-                            rs.getDouble("forecast_value")));
-                },
-                utc(since));
     }
 
     static boolean browsable(String table) {

@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClientException;
 
@@ -19,9 +20,13 @@ public class AuditController {
         this.auditService = auditService;
     }
 
+    /** days — длина периода в сутках (1–366), 0 — вся накопленная история. */
     @GetMapping("/api/audit")
-    public AuditReport audit() {
-        return auditService.report();
+    public ResponseEntity<?> audit(@RequestParam(defaultValue = "" + AuditService.DEFAULT_PERIOD_DAYS) int days) {
+        if (days < 0 || days > 366) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Период — от 1 до 366 суток или 0 для всей истории"));
+        }
+        return ResponseEntity.ok(auditService.report(days));
     }
 
     @GetMapping("/api/audit/stations/{wmo}")

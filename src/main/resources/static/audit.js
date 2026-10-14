@@ -42,6 +42,14 @@ const tip = document.getElementById('tip')
 let report = null
 let variable = 'temperature'
 let horizon = 24
+// Длина периода в сутках; 0 — вся накопленная история.
+let period = 7
+
+const PERIODS = [
+  [7, '7 дней'],
+  [30, '30 дней'],
+  [0, 'Всё время'],
+]
 // Подсказки собираются из этого списка по индексу, а не из HTML-атрибутов.
 let tips = []
 
@@ -116,6 +124,20 @@ function variableInfo() {
   return report.variables.find((item) => item.id === variable)
 }
 
+/** «24» → «1 сут»: горизонты меряются сутками, в отчёте они в часах. */
+function horizonLabel(hours) {
+  return `${hours / 24} сут`
+}
+
+function dateRu(iso) {
+  return new Date(iso).toLocaleDateString('ru-RU', { timeZone: 'Europe/Minsk', day: 'numeric', month: 'long' })
+}
+
+/** «за 7 суток» или «с 9 сентября» — для всей истории. */
+function periodPhrase() {
+  return report.periodDays > 0 ? `за ${report.periodDays} суток` : `с ${dateRu(report.periodFrom)}`
+}
+
 function numberRu(value) {
   return value.toLocaleString('ru-RU')
 }
@@ -142,8 +164,14 @@ function statsMarkup() {
   const t = report.totals
   const items = [
     ['Станций в работе', `${t.stationsActive} из ${t.stationsTotal}`, 'сеть наблюдений Белгидромета'],
-    ['Наблюдений', numberRu(t.observations), `сводки каждые 3 ч за ${report.windowHours / 24} суток`],
-    ['Пар прогноз–факт', numberRu(t.pairs), '7 моделей × 4 параметра × 3 горизонта'],
+    ['Наблюдений', numberRu(t.observations), `сводки каждые 3 ч ${periodPhrase()}`],
+    [
+      'Пар прогноз–факт',
+      numberRu(t.pairs),
+      report.horizons.length
+        ? `${report.models.length} моделей × 4 параметра, горизонты ${report.horizons[0] / 24}–${horizonLabel(report.horizons[report.horizons.length - 1])}`
+        : 'прогнозов на эти сроки ещё нет',
+    ],
     ['Отброшено значений', numberRu(t.rejectedValues), 'не прошли проверку правдоподобности'],
   ]
   return `
@@ -169,23 +197,29 @@ function controlsMarkup() {
         data-variable="${escape(item.id)}" aria-pressed="${item.id === variable}">${escape(item.label)}</button>`,
     )
     .join('')
+  const periods = PERIODS.map(
+    ([days, label]) => `
+      <button type="button" class="segmented__btn${days === period ? ' segmented__btn--active' : ''}"
+        data-period="${days}" aria-pressed="${days === period}">${escape(label)}</button>`,
+  ).join('')
+  // Горизонтов до 16 — кнопками не уместить, поэтому список.
   const horizons = report.horizons
-    .map(
-      (hours) => `
-      <button type="button" class="segmented__btn${hours === horizon ? ' segmented__btn--active' : ''}"
-        data-horizon="${hours}" aria-pressed="${hours === horizon}">${hours} ч</button>`,
-    )
+    .map((hours) => `<option value="${hours}"${hours === horizon ? ' selected' : ''}>${horizonLabel(hours)}</option>`)
     .join('')
 
   return `
     <div class="controls">
       <div class="controls__group">
+        <span class="controls__label" id="period-label">Период</span>
+        <div class="segmented" role="group" aria-labelledby="period-label">${periods}</div>
+      </div>
+      <div class="controls__group">
         <span class="controls__label" id="variable-label">Параметр</span>
         <div class="segmented" role="group" aria-labelledby="variable-label">${variables}</div>
       </div>
       <div class="controls__group">
-        <span class="controls__label" id="horizon-label">Прогноз выпущен за</span>
-        <div class="segmented" role="group" aria-labelledby="horizon-label">${horizons}</div>
+        <label class="controls__label" for="horizon-select">Прогноз выпущен за</label>
+        <select class="data-filter__select" id="horizon-select" data-horizon-select>${horizons}</select>
       </div>
     </div>`
 }
@@ -329,7 +363,7 @@ function heatmapMarkup() {
       <div class="heat-wrap">
         <table class="heat">
           <caption class="sr-only">
-            MAE по параметру «${escape(info.label)}» для прогнозов, выпущенных за ${horizon} ч до целевого часа
+            MAE по параметру «${escape(info.label)}» для прогнозов, выпущенных за ${horizonLabel(horizon)} до целевого часа
           </caption>
           <thead><tr><th scope="col" class="heat__corner">Модель</th>${head}</tr></thead>
           <tbody>${rows}</tbody>
@@ -441,9 +475,11 @@ function methodMarkup() {
       </h2>
       <ul class="method__list">
         <li><strong>Факт</strong> — наблюдения государственной сети Белгидромета из его открытого узла данных ВМО
-          за последние ${report.windowHours / 24} суток, сводки каждые 3 часа. Влажность считаем по температуре и точке росы.</li>
-        <li><strong>Прогноз</strong> — архив Open-Meteo по координатам каждой станции: для каждого срока берём прогноз
-          той же модели, выпущенный за 1, 2 или 3 суток до него.</li>
+          ${periodPhrase()}, сводки каждые 3 часа. Все сводки и прогнозы хранятся в базе приложения, отчёт считается по ней.
+          Влажность считаем по температуре и точке росы.</li>
+        <li><strong>Прогноз</strong> на 1–7 суток — архив Open-Meteo по координатам каждой станции: для каждого срока
+          берём прогноз той же модели, выпущенный за нужное число суток до него. Прогнозы на 8–16 суток архив не хранит,
+          поэтому приложение раз в сутки сохраняет их само; в выборе срока они появляются, когда наступают их целевые сроки.</li>
         <li><strong>Ошибка</strong> = прогноз − факт. MAE — средняя абсолютная ошибка,
           RMSE сильнее штрафует редкие крупные промахи, смещение показывает, в какую сторону модель ошибается.</li>
       </ul>
@@ -451,7 +487,7 @@ function methodMarkup() {
         Гербы областей — Викисклад;
         <a href="https://commons.wikimedia.org/wiki/File:Coat_of_arms_of_Mohilev_Oblast.svg" target="_blank" rel="noopener">герб Могилёвской области</a>
         — по лицензии CC BY-SA 4.0.</p>
-      <p class="section__note"><a href="/data.html">Записи базы</a> — все сводки и прогнозы, по которым посчитан отчёт.</p>
+      <p class="section__note"><a href="/data.html" data-db-link>Записи базы</a> — все сводки и прогнозы, по которым посчитан отчёт.</p>
     </section>`
 }
 
@@ -688,7 +724,7 @@ function openRegion(name) {
   const margin = size * 0.07
   const leaderNote = model
     ? ` · точнее всех ${escape(model.name)}: ${format(cell.mae, PRECISION[variable])} ${escape(info.unit)}
-       (${escape(info.label.toLowerCase())}, прогноз за ${horizon} ч)`
+       (${escape(info.label.toLowerCase())}, прогноз за ${horizonLabel(horizon)})`
     : ''
 
   dialog.classList.add('sheet--region')
@@ -808,27 +844,45 @@ root.addEventListener('click', (event) => {
     return
   }
 
-  const button = event.target.closest('[data-variable], [data-horizon]')
+  const periodButton = event.target.closest('[data-period]')
+  if (periodButton) {
+    if (Number(periodButton.dataset.period) === period) return
+    period = Number(periodButton.dataset.period)
+    hideTip()
+    load(`[data-period="${period}"]`)
+    return
+  }
+
+  const button = event.target.closest('[data-variable]')
   if (!button) return
-  if (button.dataset.variable) variable = button.dataset.variable
-  if (button.dataset.horizon) horizon = Number(button.dataset.horizon)
+  variable = button.dataset.variable
   hideTip()
   render()
   // После перерисовки фокус должен остаться на нажатой кнопке.
-  const selector = button.dataset.variable
-    ? `[data-variable="${button.dataset.variable}"]`
-    : `[data-horizon="${button.dataset.horizon}"]`
-  root.querySelector(selector)?.focus()
+  root.querySelector(`[data-variable="${button.dataset.variable}"]`)?.focus()
 })
 
-async function load() {
+root.addEventListener('change', (event) => {
+  const select = event.target.closest('[data-horizon-select]')
+  if (!select) return
+  horizon = Number(select.value)
+  hideTip()
+  render()
+  root.querySelector('[data-horizon-select]')?.focus()
+})
+
+/** focusSelector — элемент, который получит фокус после перерисовки (кнопка выбранного периода). */
+async function load(focusSelector) {
   renderSkeleton()
   try {
-    const response = await fetch('/api/audit')
+    const response = await fetch(`/api/audit?days=${period}`)
     const payload = await response.json()
     if (!response.ok) throw new Error(payload.error ?? 'Не удалось получить данные аудита')
     report = payload
+    // В новом периоде выбранного горизонта может не оказаться — тогда берём ближайший.
+    if (!report.horizons.includes(horizon)) horizon = report.horizons[0] ?? 24
     render()
+    if (focusSelector) root.querySelector(focusSelector)?.focus()
   } catch (cause) {
     root.innerHTML = `
       <p class="search__error" role="alert">

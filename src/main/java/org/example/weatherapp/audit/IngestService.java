@@ -46,8 +46,8 @@ public class IngestService {
     private static final int ATTEMPTS = 3;
     /** Если подряд с самого начала не ответило столько станций, узел считается недоступным целиком. */
     private static final int DEAD_SOURCE_THRESHOLD = 3;
-    /** Столько точек идёт в один запрос архива прогнозов: больше — ответ становится слишком тяжёлым. */
-    private static final int FORECAST_CHUNK = 7;
+    /** Столько точек идёт в один запрос к Open-Meteo: с семью горизонтами за месяц ответ и так весит мегабайты. */
+    private static final int FORECAST_CHUNK = 4;
     /** Архив прогнозов Open-Meteo отдаёт не больше 92 суток назад. */
     static final int MAX_BACKFILL_DAYS = 92;
 
@@ -100,6 +100,14 @@ public class IngestService {
         }
     }
 
+    /** Раз в сутки — снимок прогнозов на 8–16 суток вперёд; выпуском считается полночь UTC этих суток. */
+    @Scheduled(cron = "${audit.ingest.ahead-cron:0 40 0 * * *}", zone = "UTC")
+    void scheduledAhead() {
+        if (enabled) {
+            quietly("ahead forecasts", this::ingestAheadForecasts);
+        }
+    }
+
     /** Догрузка истории за days суток в фоне; false — если предыдущая ещё идёт. */
     public boolean backfill(int days) {
         if (!backfillRunning.compareAndSet(false, true)) {
@@ -109,6 +117,10 @@ public class IngestService {
             try {
                 quietly("backfill observations", () -> ingestObservations(Instant.now().minus(days, ChronoUnit.DAYS)));
                 quietly("backfill forecasts", () -> ingestForecasts(days + 1));
+                // Сегодняшний выпуск дальних прогнозов, если планировщик его ещё не сохранил.
+                if (!store.hasAheadIssue(todayIssue())) {
+                    quietly("ahead forecasts", this::ingestAheadForecasts);
+                }
             } finally {
                 backfillRunning.set(false);
             }
@@ -202,6 +214,70 @@ public class IngestService {
         return written;
     }
 
+    /**
+     * Прогнозы моделей на 8–16 суток вперёд для станций с известными координатами.
+     * Архив Open-Meteo таких горизонтов не хранит, поэтому их приходится копить самим.
+     */
+    synchronized int ingestAheadForecasts() {
+        Instant startedAt = Instant.now();
+        Instant issued = todayIssue();
+        List<StationMeta> located = store.stations().stream()
+                .filter(station -> station.latitude() != null && station.longitude() != null)
+                .toList();
+        int written = 0;
+        try {
+            for (int from = 0; from < located.size(); from += FORECAST_CHUNK) {
+                List<StationMeta> chunk = located.subList(from, Math.min(from + FORECAST_CHUNK, located.size()));
+                List<Point> points = chunk.stream()
+                        .map(station -> new Point(station.latitude(), station.longitude()))
+                        .toList();
+                List<ForecastGrid> grids = withRetry(
+                        () -> forecastClient.fetchAhead(points, AuditCatalog.LAST_AHEAD_HORIZON));
+                for (int i = 0; i < chunk.size() && i < grids.size(); i++) {
+                    List<ForecastRow> rows = aheadRows(chunk.get(i).wmo(), grids.get(i), issued);
+                    store.replaceAheadForecasts(chunk.get(i).wmo(), issued, rows);
+                    written += rows.size();
+                }
+            }
+        } catch (RuntimeException cause) {
+            store.logRun("ahead forecasts", startedAt, "FAILED", written, cause.toString());
+            throw cause;
+        }
+        store.logRun("ahead forecasts", startedAt, "OK", written, null);
+        return written;
+    }
+
+    /** Выпуск дальних прогнозов привязан к полуночи UTC: повторная выгрузка в те же сутки его заменяет. */
+    private static Instant todayIssue() {
+        return Instant.now().truncatedTo(ChronoUnit.DAYS);
+    }
+
+    /** Строки на сроки наблюдений с горизонтом 8–16 суток от выпуска. */
+    private static List<ForecastRow> aheadRows(String wmo, ForecastGrid grid, Instant issued) {
+        List<ForecastRow> rows = new ArrayList<>();
+        for (Map.Entry<Instant, Integer> hour : grid.hourIndex().entrySet()) {
+            Instant target = hour.getKey();
+            if (target.atOffset(ZoneOffset.UTC).getHour() % 3 != 0) {
+                continue;
+            }
+            // Срок через 7 суток и 3 часа после выпуска — это прогноз за 8 суток.
+            long hours = Duration.between(issued, target).toHours();
+            int horizon = (int) ((hours + 23) / 24);
+            if (horizon < AuditCatalog.FIRST_AHEAD_HORIZON || horizon > AuditCatalog.LAST_AHEAD_HORIZON) {
+                continue;
+            }
+            int index = hour.getValue();
+            for (Map.Entry<SeriesKey, double[]> series : grid.series().entrySet()) {
+                double[] values = series.getValue();
+                if (index < values.length && !Double.isNaN(values[index])) {
+                    SeriesKey key = series.getKey();
+                    rows.add(new ForecastRow(wmo, key.model(), key.variable(), horizon, target, values[index]));
+                }
+            }
+        }
+        return rows;
+    }
+
     private static ObservationRow row(Station station, RawReport report) {
         Map<String, Double> v = report.values();
         Double temperature = v.get(ObservationClient.TEMPERATURE);
@@ -219,7 +295,7 @@ public class IngestService {
                 case PRESSURE -> pressureSea;
                 case WIND -> windSpeed;
             };
-            if (raw != null && AuditService.plausible(variable, raw) == null) {
+            if (raw != null && variable.plausible(raw) == null) {
                 rejected++;
             }
         }

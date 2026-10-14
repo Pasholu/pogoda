@@ -40,8 +40,12 @@
           <span class="topbar__title">ForecastAudit</span>
         </a>
         <nav class="nav" aria-label="Разделы">
-          <a class="nav__link" href="/">Метеопост хозяйства</a>
-          <a class="nav__link nav__link--active" href="/audit.html" aria-current="page">Аудит прогнозов</a>
+          <a class="nav__link" href="/"><span class="nav__long">Метеопост хозяйства</span><span class="nav__short">Метеопост</span></a>
+          <a class="nav__link nav__link--active" href="/audit.html" aria-current="page"><span class="nav__long">Аудит прогнозов</span><span class="nav__short">Аудит</span></a>
+          <a class="nav__link nav__link--db" href="/data.html" data-db-link>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+            <span class="nav__long">База данных</span><span class="nav__short">База</span>
+          </a>
         </nav>
       </div>
     </header>
@@ -64,5 +68,6 @@
     <script src="/belarus-map.js"></script>
     <script src="/audit.js"></script>
     <script src="/brand.js"></script>
+    <script src="/db-connect.js"></script>
   </body>
 </html>

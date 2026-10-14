@@ -312,6 +312,24 @@ body::after {
   color: var(--foreground);
 }
 
+/* Короткие подписи разделов — только на узком экране. */
+.nav__short {
+  display: none;
+}
+
+/* Ссылка на базу данных со значком. */
+.nav__link--db {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.nav__link--db:hover {
+  background: rgb(255 255 255 / 0.6);
+}
+
+
 .nav__link--active {
   background: rgb(255 255 255 / 0.85);
   box-shadow: 0 4px 12px -6px rgb(15 60 140 / 0.3), inset 0 1px 0 #fff;
@@ -910,7 +928,8 @@ body::after {
   gap: 1rem 2.5rem;
   margin-top: 1.25rem;
   padding: 0.75rem 0.75rem 0.75rem 1.5rem;
-  border-radius: var(--radius-pill);
+  /* Переключателей три группы, и в узкой колонке они переносятся: «пилюля» в две строки смотрится криво. */
+  border-radius: var(--radius-panel);
 }
 
 .controls__group {
@@ -1594,7 +1613,329 @@ body::after {
   margin-top: 0;
 }
 
+/* --- Переход «Импульс соединения» --- */
+
+.dbc__veil {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgb(20 33 61 / 0.26);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.dbc__card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 51;
+  width: min(500px, calc(100vw - 32px));
+  height: 230px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.85);
+  border-radius: 24px;
+  background: rgb(255 255 255 / 0.62);
+  box-shadow: 0 24px 70px rgb(20 33 61 / 0.18);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.94);
+  transition:
+    width 400ms cubic-bezier(0.65, 0, 0.35, 1),
+    height 400ms cubic-bezier(0.65, 0, 0.35, 1),
+    border-radius 400ms cubic-bezier(0.65, 0, 0.35, 1),
+    background-color 400ms ease,
+    opacity 200ms ease,
+    transform 250ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.dbc--in .dbc__veil,
+.dbc--in .dbc__card {
+  opacity: 1;
+}
+
+.dbc--in .dbc__card {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* Раскрытие на весь экран: цвет совпадает с небом страницы записей, которая появится следом. */
+.dbc--expanded .dbc__card {
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
+  background: var(--sky);
+  transform: translate(-50%, -50%);
+}
+
+.dbc__content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: 420px;
+  max-width: calc(100% - 40px);
+  transform: translate(-50%, -50%);
+  transition: opacity 150ms ease;
+}
+
+.dbc--expanded .dbc__content {
+  opacity: 0;
+}
+
+.dbc__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dbc__tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  flex: none;
+  border: 1px solid rgb(20 33 61 / 0.06);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgb(20 33 61 / 0.08);
+  color: #6f9bd8;
+}
+
+.dbc__tile--db {
+  color: #8a97ae;
+  transition:
+    transform 200ms cubic-bezier(0.3, 1.6, 0.5, 1),
+    box-shadow 300ms ease,
+    color 300ms ease;
+}
+
+.dbc--connected .dbc__tile--db {
+  box-shadow: 0 0 0 6px rgb(109 184 168 / 0.18), 0 0 28px 6px rgb(109 184 168 / 0.55);
+  color: #3e8f7e;
+}
+
+.dbc--pulse .dbc__tile--db {
+  transform: scale(1.18);
+}
+
+.dbc__track {
+  position: relative;
+  flex: 1;
+  height: 20px;
+}
+
+.dbc__dash {
+  position: absolute;
+  top: 9px;
+  right: 0;
+  left: 0;
+  border-top: 2px dashed rgb(20 33 61 / 0.22);
+}
+
+.dbc__trail {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  width: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgb(109 184 168 / 0.35), #6db8a8);
+}
+
+.dbc__dot {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #6db8a8;
+  box-shadow: 0 0 0 5px rgb(109 184 168 / 0.22), 0 0 18px 4px rgb(109 184 168 / 0.75);
+  transform: translate(-50%, -50%);
+}
+
+.dbc--failed .dbc__dot,
+.dbc--failed .dbc__trail {
+  opacity: 0;
+}
+
+.dbc__status {
+  position: relative;
+  height: 22px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dbc__wait {
+  position: absolute;
+  right: 0;
+  left: 0;
+  color: var(--muted-foreground);
+  text-align: center;
+  transition: opacity 200ms ease;
+}
+
+.dbc--failed .dbc__wait {
+  color: var(--destructive);
+}
+
+/* Подпись встаёт под значком базы, к которому пришёл импульс. */
+.dbc__ok {
+  position: absolute;
+  right: -30px;
+  width: 124px;
+  color: #3e8f7e;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 250ms ease,
+    transform 250ms ease;
+}
+
+.dbc--connected .dbc__wait {
+  opacity: 0;
+}
+
+.dbc--connected .dbc__ok {
+  opacity: 1;
+  transform: none;
+}
+
 /* --- Записи базы --- */
+
+/* Страница проявляется после анимации соединения и гаснет перед уходом. */
+.data-enter .topbar,
+.data-enter .page {
+  animation: data-fade-in 300ms ease backwards;
+}
+
+.data-page .topbar,
+.data-page .page {
+  transition: opacity 300ms ease;
+}
+
+.data-leaving .topbar,
+.data-leaving .page {
+  opacity: 0;
+}
+
+@keyframes data-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Утки на фоне: две размытые, еле заметные стаи медленно пересекают небо. */
+.ducks {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ducks__flock {
+  position: absolute;
+  left: 0;
+  fill: #35527f;
+  animation: ducks-cross linear infinite;
+}
+
+/* Отрицательная задержка ставит стаю в середину пути: небо не пустует при открытии страницы. */
+.ducks__flock--near {
+  top: 26%;
+  opacity: 0.13;
+  filter: blur(2.5px);
+  animation-duration: 80s;
+  animation-delay: -24s;
+}
+
+.ducks__flock--far {
+  top: 62%;
+  opacity: 0.09;
+  filter: blur(3.5px);
+  animation-duration: 120s;
+  animation-delay: -78s;
+}
+
+.ducks__duck {
+  position: absolute;
+  height: auto;
+  overflow: visible;
+}
+
+.ducks__wing {
+  transform-origin: 30px 23px;
+  animation: ducks-flap 0.5s ease-in-out infinite alternate;
+  animation-delay: var(--flap-delay);
+}
+
+@keyframes ducks-cross {
+  from {
+    transform: translate(-12vw, 4vh);
+  }
+
+  to {
+    transform: translate(125vw, -8vh);
+  }
+}
+
+@keyframes ducks-flap {
+  from {
+    transform: scaleY(1);
+  }
+
+  to {
+    transform: scaleY(-0.55);
+  }
+}
+
+/* Строки выезжают каскадом; задержку каждой задаёт разметка. */
+.data-row {
+  animation: data-row-in 400ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+@keyframes data-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.db-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-pill);
+  background: rgb(109 184 168 / 0.16);
+  color: #2f7a6b;
+  font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.db-badge__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6db8a8;
+}
+
+.db-badge--pending {
+  background: var(--well);
+  color: var(--muted-foreground);
+}
+
+.db-badge--pending .db-badge__dot {
+  background: var(--muted-foreground);
+}
 
 .data-filters {
   gap: 0.75rem 1.5rem;
@@ -1760,6 +2101,229 @@ body::after {
   }
 }
 
+/* --- Телефон --- */
+
+/*
+ * Узкий экран: всё в одну колонку, переключатели прокручиваются вбок,
+ * таблицы — внутри своих панелей. Ширина 760px покрывает и планшеты в портрете.
+ */
+@media (max-width: 760px) {
+  .topbar {
+    padding: 0.5rem 0.5rem 0;
+  }
+
+  .topbar__inner {
+    gap: 0.375rem;
+    padding: 0.375rem;
+  }
+
+  /* В шапке остаётся знак: название не помещается рядом с разделами. */
+  .topbar__title,
+  .db-badge {
+    display: none;
+  }
+
+  .brand {
+    padding-right: 0;
+  }
+
+  .nav {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav__link {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    white-space: nowrap;
+  }
+
+  .nav__long {
+    display: none;
+  }
+
+  .nav__short {
+    display: inline;
+  }
+
+  .page {
+    padding: 2rem 1rem 3rem;
+  }
+
+  .page__lead {
+    font-size: 1rem;
+  }
+
+  .section,
+  .advice {
+    margin-top: 2.25rem;
+  }
+
+  /* Сводные числа — два на два. */
+  .stats {
+    grid-template-columns: 1fr 1fr;
+    margin-top: 1.75rem;
+  }
+
+  .stats__item {
+    padding: 1rem 1.125rem;
+  }
+
+  .stats__item + .stats__item {
+    border-left: none;
+  }
+
+  .stats__item:nth-child(even) {
+    border-left: 1px solid var(--hairline);
+  }
+
+  .stats__item:nth-child(n + 3) {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .stats__value {
+    font-size: 1.625rem;
+  }
+
+  /* Переключатели — столбиком, каждый прокручивается вбок, если не помещается. */
+  /* Без переноса: в столбце с переносом группы растягиваются по самой широкой, а не по панели. */
+  .controls {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+    padding: 0.875rem;
+    border-radius: var(--radius-panel);
+  }
+
+  /* Группа тянется на всю ширину панели — иначе длинный переключатель распирает страницу вбок. */
+  .controls__group {
+    flex-direction: column;
+    align-items: flex-start;
+    align-self: stretch;
+    gap: 0.375rem;
+    min-width: 0;
+  }
+
+  .controls .segmented {
+    max-width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .segmented__btn,
+  .tab {
+    flex: none;
+    padding: 0 0.875rem;
+    white-space: nowrap;
+  }
+
+  /* Карта: легенда под ней; подписи на карте при такой ширине нечитаемы — область открывается касанием. */
+  .map-wrap {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .map__label {
+    display: none;
+  }
+
+  .heat-wrap {
+    padding: 0.5rem;
+  }
+
+  .heat__cell {
+    min-width: 4.5rem;
+    height: 3.25rem;
+  }
+
+  .heat__model {
+    padding-right: 0.75rem;
+  }
+
+  .bars__row {
+    grid-template-columns: 1.25rem 4.5rem 1fr 4.75rem;
+    gap: 0.5rem;
+    padding: 0.5rem;
+  }
+
+  .stations {
+    grid-template-columns: 1fr;
+  }
+
+  /* Окна — почти во весь экран. */
+  .sheet,
+  .sheet--region {
+    width: calc(100vw - 1rem);
+    max-height: calc(100dvh - 1rem);
+    border-radius: var(--radius-tile);
+  }
+
+  .sheet__head {
+    gap: 0.75rem;
+    padding: 1rem 0.75rem 0.875rem 1.125rem;
+  }
+
+  .sheet__title {
+    font-size: 1.25rem;
+  }
+
+  .sheet__arms {
+    height: 3.25rem;
+  }
+
+  .sheet__table thead th:first-child,
+  .sheet__table tbody th {
+    padding-left: 1rem;
+  }
+
+  .sheet__foot {
+    padding: 0.75rem 1rem;
+  }
+
+  .region {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .region__map {
+    max-height: 16rem;
+  }
+
+  /* Страница записей. */
+  .data-filters {
+    padding: 0.875rem;
+  }
+
+  .data-filter {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .data-filter__select {
+    max-width: 65%;
+  }
+
+  .data-wrap {
+    max-height: 65vh;
+    border-radius: var(--radius-tile);
+  }
+
+  .data-pager {
+    flex-direction: column;
+    align-items: flex-start;
+    padding-left: 0.25rem;
+  }
+
+  .dbc__ok {
+    right: -8px;
+    width: 96px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1771,5 +2335,20 @@ body::after {
   /* Бесконечная анимация при сверхкороткой длительности мерцала бы. */
   body::after {
     animation: none;
+  }
+
+  /* Строки записей появляются сразу, без каскада. */
+  .data-row {
+    animation: none;
+  }
+
+  /* Утки замирают посреди неба: бесконечные анимации при сверхкороткой длительности мерцали бы. */
+  .ducks__flock,
+  .ducks__wing {
+    animation: none;
+  }
+
+  .ducks__flock {
+    transform: translateX(55vw);
   }
 }

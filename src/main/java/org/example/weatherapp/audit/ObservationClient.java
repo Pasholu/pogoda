@@ -129,9 +129,4 @@ class ObservationClient {
         double actual = Math.exp(17.625 * dewPoint / (243.04 + dewPoint));
         return Math.min(100, 100 * actual / saturated);
     }
-
-    /** Проверка правдоподобности: значение вне физических пределов отбрасывается. */
-    static Double within(Double value, double min, double max) {
-        return value != null && value >= min && value <= max ? value : null;
-    }
 }

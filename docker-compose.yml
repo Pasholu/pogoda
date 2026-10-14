@@ -8,7 +8,11 @@ services:
   db:
     image: postgres:17
     restart: unless-stopped
+    # Время в базе — минское: так его показывают и psql, и pgAdmin, и DBeaver.
+    # Хранится оно по-прежнему с поясом, поэтому расчёты от этого не зависят.
+    command: ["postgres", "-c", "timezone=Europe/Minsk", "-c", "log_timezone=Europe/Minsk"]
     environment:
+      TZ: Europe/Minsk
       POSTGRES_DB: forecastaudit
       POSTGRES_USER: ${DB_USER:-forecast}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-forecast}
@@ -31,6 +35,8 @@ services:
       db:
         condition: service_healthy
     environment:
+      TZ: Europe/Minsk
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Europe/Minsk
       DB_URL: jdbc:postgresql://db:5432/forecastaudit?reWriteBatchedInserts=true
       DB_USER: ${DB_USER:-forecast}
       DB_PASSWORD: ${DB_PASSWORD:-forecast}
