@@ -816,6 +816,332 @@ body::after {
   margin-top: 0.1875rem;
 }
 
+/* --- Загрузка метеопоста: ветер и мельница --- */
+
+/* Как у перехода к базе данных: страница затуманивается, по центру — стеклянная карточка. */
+.mill-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.mill-overlay__veil {
+  position: absolute;
+  inset: 0;
+  background: rgb(20 33 61 / 0.26);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.mill {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.125rem;
+  width: min(440px, 100%);
+  padding: 1.75rem 1.25rem 1.5rem;
+  border: 1px solid rgb(255 255 255 / 0.85);
+  border-radius: 24px;
+  background: rgb(255 255 255 / 0.62);
+  box-shadow: 0 24px 70px rgb(20 33 61 / 0.18);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  opacity: 0;
+  transform: scale(0.94);
+  transition:
+    opacity 200ms ease,
+    transform 250ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.mill-overlay--in .mill-overlay__veil,
+.mill-overlay--in .mill {
+  opacity: 1;
+}
+
+.mill-overlay--in .mill {
+  transform: none;
+}
+
+.mill__scene {
+  width: 100%;
+  max-width: 320px;
+}
+
+.mill__scene svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.mill__cloud {
+  fill: #fff;
+  animation: mill-cloud linear infinite;
+}
+
+.mill__cloud--near {
+  fill-opacity: 0.85;
+  animation-duration: 26s;
+  animation-delay: -9s;
+}
+
+.mill__cloud--far {
+  fill-opacity: 0.7;
+  animation-duration: 38s;
+  animation-delay: -28s;
+}
+
+.mill__tower {
+  fill: #f6f9fd;
+  stroke: #0b1f3f;
+  stroke-width: 2;
+}
+
+.mill__roof {
+  fill: #e3ecf8;
+  stroke: #0b1f3f;
+  stroke-width: 2;
+}
+
+.mill__door {
+  stroke: #46597a;
+  stroke-width: 2;
+}
+
+/* Порыв доходит до мельницы — лопасти ускоряются, затем снова идут ровно. */
+.mill__sails {
+  transform-box: view-box;
+  transform-origin: 160px 86px;
+  animation: mill-spin 3.6s infinite;
+}
+
+.mill__blade {
+  stroke-width: 1.8;
+}
+
+.mill__blade line {
+  stroke: #0b1f3f;
+}
+
+.mill__blade rect {
+  fill: #fff;
+  fill-opacity: 0.75;
+  stroke: #46597a;
+}
+
+.mill__hub {
+  fill: #0a5fd6;
+  stroke: #0b1f3f;
+  stroke-width: 1.6;
+}
+
+.mill__grass {
+  stroke: #8fae94;
+  stroke-width: 1.8;
+}
+
+.mill__grass path {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mill-sway 3.6s ease-in-out infinite;
+}
+
+.mill__wind {
+  stroke-width: 1.8;
+  filter: drop-shadow(0 0 3px rgb(255 255 255 / 0.95));
+}
+
+/* Струя ветра — отрезок пути, бегущий слева направо и закручивающийся у мельницы. */
+.mill__wind path {
+  stroke-dasharray: 34 166;
+  stroke-dashoffset: 34;
+  opacity: 0;
+  animation: mill-wind 3.6s ease-in-out infinite;
+}
+
+/* Обе подписи в одной клетке: первая уходит через 4 секунды, вторая занимает её место. */
+.mill__caption {
+  display: grid;
+  color: var(--muted-foreground);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.mill__text {
+  grid-area: 1 / 1;
+}
+
+.mill__text--first {
+  animation: mill-text-out 0.6s ease 4s forwards;
+}
+
+.mill__text--later {
+  opacity: 0;
+  animation: mill-text-in 0.6s ease 4.1s forwards;
+}
+
+@keyframes mill-spin {
+  0% {
+    transform: rotate(0deg);
+    animation-timing-function: linear;
+  }
+
+  35% {
+    transform: rotate(45deg);
+    animation-timing-function: cubic-bezier(0.5, 0.09, 0.6, 0.5);
+  }
+
+  60% {
+    transform: rotate(225deg);
+    animation-timing-function: cubic-bezier(0.15, 0.4, 0.5, 0.81);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes mill-wind {
+  0% {
+    stroke-dashoffset: 34;
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  50% {
+    stroke-dashoffset: -66;
+    opacity: 1;
+  }
+
+  62%,
+  100% {
+    stroke-dashoffset: -70;
+    opacity: 0;
+  }
+}
+
+@keyframes mill-sway {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+
+  50% {
+    transform: rotate(4deg);
+  }
+}
+
+@keyframes mill-cloud {
+  from {
+    transform: translateX(-90px);
+  }
+
+  to {
+    transform: translateX(410px);
+  }
+}
+
+@keyframes mill-text-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes mill-text-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --- Загрузка аудита: перелистывание журнала наблюдений --- */
+
+/*
+ * Перенесено из макета Claude Design как есть: сцена собрана из трёх листов, каждый
+ * переворачивается вокруг корешка. Скорость листа — переменная --fa-flip.
+ */
+.fa-loader{--fa-flip:0.8s;position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:16px;font-family:"Onest",system-ui,-apple-system,sans-serif}
+.fa-loader__backdrop{position:absolute;inset:0;background:rgba(20,33,61,.26);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);animation:fa-fade .25s ease both}
+.fa-loader__card{position:relative;box-sizing:border-box;width:100%;max-width:440px;padding:28px 24px 24px;display:flex;flex-direction:column;align-items:center;gap:14px;border-radius:24px;background:rgba(255,255,255,.62);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.75);box-shadow:0 24px 70px rgba(20,33,61,.18);animation:fa-in .25s cubic-bezier(.2,.8,.2,1) both}
+.fa-loader[data-state="closing"] .fa-loader__backdrop{animation:fa-fade-out .25s ease both}
+.fa-loader[data-state="closing"] .fa-loader__card{animation:fa-out .25s ease both}
+
+.fa-scene{position:relative;width:100%;max-width:320px;aspect-ratio:320/200}
+.fa-book{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.fa-leaf,.fa-shadow{position:absolute;top:13%;height:75%;width:36.25%}
+.fa-leaf{left:50%;transform-origin:0 50%;z-index:4;animation:fa-turn calc(var(--fa-flip)*3) infinite,fa-z calc(var(--fa-flip)*3) infinite;animation-delay:var(--d),var(--d)}
+.fa-leaf--1{--d:0s}
+.fa-leaf--2{--d:calc(var(--fa-flip)*-2)}
+.fa-leaf--3{--d:calc(var(--fa-flip)*-1)}
+.fa-face{position:absolute;inset:0}
+.fa-face svg{display:block;width:100%;height:100%}
+.fa-face--back{transform:scaleX(-1);opacity:0}
+.fa-face--front{animation:fa-front calc(var(--fa-flip)*3) infinite var(--d)}
+.fa-face--back{animation:fa-back calc(var(--fa-flip)*3) infinite var(--d)}
+.fa-leaf__shade{position:absolute;inset:0;border-radius:0 9px 9px 0;background:linear-gradient(90deg,rgba(20,33,61,.02),rgba(20,33,61,.14));opacity:0;animation:fa-shade calc(var(--fa-flip)*3) infinite var(--d)}
+.fa-stamp{transform-box:fill-box;transform-origin:center;opacity:0;animation:fa-stamp calc(var(--fa-flip)*3) infinite var(--d)}
+.fa-shadow{z-index:5;opacity:0;pointer-events:none;animation:fa-sh-r var(--fa-flip) infinite}
+.fa-shadow--r{left:50%;border-radius:0 9px 9px 0;background:linear-gradient(90deg,rgba(20,33,61,.16),rgba(20,33,61,0) 75%)}
+.fa-shadow--l{left:13.75%;border-radius:9px 0 0 9px;background:linear-gradient(270deg,rgba(20,33,61,.14),rgba(20,33,61,0) 75%);animation-name:fa-sh-l}
+
+.fa-caption{display:grid;margin:0;font-size:15px;line-height:1.4;color:#46597a;text-align:center;text-wrap:balance}
+.fa-caption>span{grid-area:1/1}
+.fa-caption__a{animation:fa-cap-out .45s ease 4s both}
+.fa-caption__b{opacity:0;animation:fa-cap-in .45s ease 4.2s both}
+
+@keyframes fa-in{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+@keyframes fa-out{from{opacity:1;transform:none}to{opacity:0;transform:scale(.94)}}
+@keyframes fa-fade{from{opacity:0}to{opacity:1}}
+@keyframes fa-fade-out{from{opacity:1}to{opacity:0}}
+@keyframes fa-cap-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-4px)}}
+@keyframes fa-cap-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* cycle = 3 leaves × flip; turn takes ~0.78 of each flip slot */
+@keyframes fa-turn{
+  0%{transform:perspective(700px) rotateY(0) skewY(0);animation-timing-function:cubic-bezier(.45,0,.6,.6)}
+  7%{transform:perspective(700px) rotateY(-24deg) skewY(-3deg);animation-timing-function:cubic-bezier(.3,.2,.7,.8)}
+  18%{transform:perspective(700px) rotateY(-150deg) skewY(-2.5deg);animation-timing-function:cubic-bezier(.2,.6,.3,1)}
+  26%,59.9%{transform:perspective(700px) rotateY(-180deg) skewY(0)}
+  60%,100%{transform:perspective(700px) rotateY(0) skewY(0)}
+}
+@keyframes fa-z{0%,33.2%{z-index:6}33.3%,59.9%{z-index:4}60%,66.6%{z-index:2}66.7%,100%{z-index:4}}
+@keyframes fa-front{0%,12.7%{opacity:1}12.8%,59.9%{opacity:0}60%,100%{opacity:1}}
+@keyframes fa-back{0%,12.7%{opacity:0}12.8%,59.9%{opacity:1}60%,100%{opacity:0}}
+@keyframes fa-shade{0%{opacity:0}12.8%{opacity:1}26%,100%{opacity:0}}
+@keyframes fa-stamp{0%,27%{opacity:0;transform:scale(1.3)}31%{opacity:.9;transform:scale(.96)}34%,59%{opacity:.9;transform:scale(1)}60%,100%{opacity:0;transform:scale(1.3)}}
+@keyframes fa-sh-r{0%{opacity:0}30%{opacity:1}48%,100%{opacity:0}}
+@keyframes fa-sh-l{0%,40%{opacity:0}68%{opacity:1}88%,100%{opacity:0}}
+
+/* static journal: reduced motion, or .fa-loader--static for QA */
+@media (prefers-reduced-motion:reduce){
+  .fa-loader .fa-leaf,.fa-loader .fa-face,.fa-loader .fa-leaf__shade,.fa-loader .fa-stamp,.fa-loader .fa-shadow{animation:none}
+  .fa-loader .fa-leaf--2{z-index:2}
+  .fa-loader .fa-leaf--3{transform:rotateY(-180deg)}
+  .fa-loader .fa-leaf--3 .fa-face--front{opacity:0}
+  .fa-loader .fa-leaf--3 .fa-face--back{opacity:1}
+  .fa-loader .fa-loader__card{animation-name:fa-fade}
+}
+.fa-loader--static .fa-leaf,.fa-loader--static .fa-face,.fa-loader--static .fa-leaf__shade,.fa-loader--static .fa-stamp,.fa-loader--static .fa-shadow{animation:none}
+.fa-loader--static .fa-leaf--2{z-index:2}
+.fa-loader--static .fa-leaf--3{transform:rotateY(-180deg)}
+.fa-loader--static .fa-leaf--3 .fa-face--front{opacity:0}
+.fa-loader--static .fa-leaf--3 .fa-face--back{opacity:1}
+
 /* --- Скелет загрузки --- */
 
 .skeleton {
@@ -880,10 +1206,6 @@ body::after {
   margin-top: 2.5rem;
   color: var(--muted-foreground);
   font-size: 0.9375rem;
-}
-
-.audit-skeleton {
-  margin-top: 1.5rem;
 }
 
 /* Сводные числа — одна стеклянная лента с делениями, а не четыре одинаковые карточки. */
@@ -2340,6 +2662,17 @@ body::after {
   /* Строки записей появляются сразу, без каскада. */
   .data-row {
     animation: none;
+  }
+
+  /* Мельница стоит, ветра нет; подпись сменяется без движения. */
+  .mill__sails,
+  .mill__cloud,
+  .mill__grass path {
+    animation: none;
+  }
+
+  .mill__wind {
+    display: none;
   }
 
   /* Утки замирают посреди неба: бесконечные анимации при сверхкороткой длительности мерцали бы. */

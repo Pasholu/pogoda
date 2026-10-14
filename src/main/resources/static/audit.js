@@ -142,23 +142,66 @@ function numberRu(value) {
   return value.toLocaleString('ru-RU')
 }
 
-function renderSkeleton() {
-  root.innerHTML = `
-    <div class="audit-loading">
-      <i data-lucide="refresh-cw" class="icon spin" aria-hidden="true"></i>
-      Собираем наблюдения станций Белгидромета и архив прогнозов 7 моделей — первый расчёт занимает до 30 секунд.
-    </div>
-    <div class="skeleton audit-skeleton" aria-hidden="true">
-      <div class="skeleton__pair skeleton__pair--four">
-        <div class="skeleton__bar skeleton__bar--tile"></div>
-        <div class="skeleton__bar skeleton__bar--tile"></div>
-        <div class="skeleton__bar skeleton__bar--tile"></div>
-        <div class="skeleton__bar skeleton__bar--tile"></div>
-      </div>
-      <div class="skeleton__bar skeleton__bar--block"></div>
-    </div>`
-  lucide.createIcons()
+// Окно загрузки поверх затуманенной страницы: перелистывается журнал наблюдений.
+// Короткое: держится не меньше JOURNAL_MIN_MS, даже если отчёт уже в кэше.
+const JOURNAL_MIN_MS = 800
+const JOURNAL_FADE_MS = 250
+let journal = null
+let journalShownAt = 0
+
+function showJournal() {
+  if (journal) return
+  journal = document.createElement('div')
+  journal.className = 'fa-loader'
+  journal.dataset.state = 'open'
+  journal.setAttribute('role', 'status')
+  journal.setAttribute('aria-live', 'polite')
+  journal.innerHTML = `<div class="fa-loader__backdrop"></div>${JOURNAL_CARD}`
+  document.body.append(journal)
+  journalShownAt = performance.now()
 }
+
+function hideJournal() {
+  const overlay = journal
+  if (!overlay) return
+  journal = null
+  const wait = Math.max(0, JOURNAL_MIN_MS - (performance.now() - journalShownAt))
+  setTimeout(() => {
+    overlay.dataset.state = 'closing'
+    setTimeout(() => overlay.remove(), JOURNAL_FADE_MS)
+  }, wait)
+}
+
+const JOURNAL_CARD = `
+<div class="fa-loader__card">
+    <div class="fa-scene" aria-hidden="true">
+      <svg class="fa-book" viewBox="0 0 320 200" fill="none">
+        <rect x="36" y="18" width="248" height="166" rx="14" fill="#cde2fb" stroke="#0b1f3f" stroke-width="1.8"/>
+        <path d="M50 180H154M166 180H270" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <div class="fa-shadow fa-shadow--l"></div>
+      <div class="fa-shadow fa-shadow--r"></div>
+      <div class="fa-leaf fa-leaf--1">
+        <div class="fa-face fa-face--front"><svg viewBox="0 0 116 150" overflow="visible" fill="none"><path d="M0 0H107a9 9 0 0 1 9 9V141a9 9 0 0 1-9 9H0Z" fill="#fff" stroke="#0b1f3f" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 18H50" stroke="#46597a" stroke-width="2" stroke-linecap="round"/><path d="M14 32H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 32H102" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 42H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 42H90" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 52H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 52H96" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 126H102" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><rect x="19" y="104" width="8" height="18" rx="2.5" fill="#9db4d6"/><rect x="33" y="92" width="8" height="30" rx="2.5" fill="#9db4d6"/><rect x="47" y="98" width="8" height="24" rx="2.5" fill="#9db4d6"/><rect x="61" y="82" width="8" height="40" rx="2.5" fill="#0a5fd6"/><rect x="75" y="94" width="8" height="28" rx="2.5" fill="#9db4d6"/><rect x="89" y="88" width="8" height="34" rx="2.5" fill="#9db4d6"/></svg></div>
+        <div class="fa-face fa-face--back"><svg viewBox="0 0 116 150" overflow="visible" fill="none"><path d="M116 0H9a9 9 0 0 0-9 9V141a9 9 0 0 0 9 9H116Z" fill="#fff" stroke="#0b1f3f" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 18H50" stroke="#46597a" stroke-width="2" stroke-linecap="round"/><rect x="14" y="30" width="18" height="11" rx="3" fill="#cde2fb"/><rect x="36" y="30" width="18" height="11" rx="3" fill="#7aaeea"/><rect x="58" y="30" width="18" height="11" rx="3" fill="#2a78d6"/><rect x="80" y="30" width="18" height="11" rx="3" fill="#a6c9f3"/><rect x="14" y="45" width="18" height="11" rx="3" fill="#4e92df"/><rect x="36" y="45" width="18" height="11" rx="3" fill="#cde2fb"/><rect x="58" y="45" width="18" height="11" rx="3" fill="#7aaeea"/><rect x="80" y="45" width="18" height="11" rx="3" fill="#2a78d6"/><rect x="14" y="60" width="18" height="11" rx="3" fill="#a6c9f3"/><rect x="36" y="60" width="18" height="11" rx="3" fill="#4e92df"/><rect x="58" y="60" width="18" height="11" rx="3" fill="#cde2fb"/><rect x="80" y="60" width="18" height="11" rx="3" fill="#7aaeea"/><path d="M14 92H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 92H102" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 102H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 102H90" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 112H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 112H96" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 122H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 122H84" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 132H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 132H100" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/></svg></div>
+        <div class="fa-leaf__shade"></div>
+      </div>
+      <div class="fa-leaf fa-leaf--2">
+        <div class="fa-face fa-face--front"><svg viewBox="0 0 116 150" overflow="visible" fill="none"><path d="M0 0H107a9 9 0 0 1 9 9V141a9 9 0 0 1-9 9H0Z" fill="#fff" stroke="#0b1f3f" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 18H50" stroke="#46597a" stroke-width="2" stroke-linecap="round"/><path d="M14 32H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 32H102" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 42H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 42H90" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><rect x="14" y="56" width="18" height="11" rx="3" fill="#7aaeea"/><rect x="36" y="56" width="18" height="11" rx="3" fill="#2a78d6"/><rect x="58" y="56" width="18" height="11" rx="3" fill="#a6c9f3"/><rect x="80" y="56" width="18" height="11" rx="3" fill="#4e92df"/><path d="M14 128H102" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><rect x="19" y="102" width="8" height="22" rx="2.5" fill="#9db4d6"/><rect x="33" y="110" width="8" height="14" rx="2.5" fill="#9db4d6"/><rect x="47" y="94" width="8" height="30" rx="2.5" fill="#9db4d6"/><rect x="61" y="98" width="8" height="26" rx="2.5" fill="#9db4d6"/><rect x="75" y="88" width="8" height="36" rx="2.5" fill="#0a5fd6"/><rect x="89" y="104" width="8" height="20" rx="2.5" fill="#9db4d6"/></svg></div>
+        <div class="fa-face fa-face--back"><svg viewBox="0 0 116 150" overflow="visible" fill="none"><path d="M116 0H9a9 9 0 0 0-9 9V141a9 9 0 0 0 9 9H116Z" fill="#fff" stroke="#0b1f3f" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 18H50" stroke="#46597a" stroke-width="2" stroke-linecap="round"/><path d="M14 82H102" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><rect x="19" y="52" width="8" height="26" rx="2.5" fill="#9db4d6"/><rect x="33" y="44" width="8" height="34" rx="2.5" fill="#0a5fd6"/><rect x="47" y="58" width="8" height="20" rx="2.5" fill="#9db4d6"/><rect x="61" y="40" width="8" height="38" rx="2.5" fill="#9db4d6"/><rect x="75" y="48" width="8" height="30" rx="2.5" fill="#9db4d6"/><rect x="89" y="62" width="8" height="16" rx="2.5" fill="#9db4d6"/><path d="M14 100H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 100H102" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 110H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 110H90" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 120H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 120H96" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 130H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 130H84" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/></svg></div>
+        <div class="fa-leaf__shade"></div>
+      </div>
+      <div class="fa-leaf fa-leaf--3">
+        <div class="fa-face fa-face--front"><svg viewBox="0 0 116 150" overflow="visible" fill="none"><path d="M0 0H107a9 9 0 0 1 9 9V141a9 9 0 0 1-9 9H0Z" fill="#fff" stroke="#0b1f3f" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 18H50" stroke="#46597a" stroke-width="2" stroke-linecap="round"/><rect x="14" y="30" width="18" height="11" rx="3" fill="#a6c9f3"/><rect x="36" y="30" width="18" height="11" rx="3" fill="#4e92df"/><rect x="58" y="30" width="18" height="11" rx="3" fill="#cde2fb"/><rect x="80" y="30" width="18" height="11" rx="3" fill="#7aaeea"/><rect x="14" y="45" width="18" height="11" rx="3" fill="#2a78d6"/><rect x="36" y="45" width="18" height="11" rx="3" fill="#a6c9f3"/><rect x="58" y="45" width="18" height="11" rx="3" fill="#4e92df"/><rect x="80" y="45" width="18" height="11" rx="3" fill="#cde2fb"/><path d="M14 72H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 72H102" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 82H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 82H90" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 92H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 92H96" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 132H102" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><rect x="19" y="116" width="8" height="12" rx="2.5" fill="#9db4d6"/><rect x="33" y="108" width="8" height="20" rx="2.5" fill="#9db4d6"/><rect x="47" y="112" width="8" height="16" rx="2.5" fill="#9db4d6"/><rect x="61" y="104" width="8" height="24" rx="2.5" fill="#9db4d6"/><rect x="75" y="110" width="8" height="18" rx="2.5" fill="#9db4d6"/><rect x="89" y="106" width="8" height="22" rx="2.5" fill="#0a5fd6"/></svg></div>
+        <div class="fa-face fa-face--back"><svg viewBox="0 0 116 150" overflow="visible" fill="none"><path d="M116 0H9a9 9 0 0 0-9 9V141a9 9 0 0 0 9 9H116Z" fill="#fff" stroke="#0b1f3f" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 18H50" stroke="#46597a" stroke-width="2" stroke-linecap="round"/><path d="M14 32H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 32H102" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 42H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 42H90" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 52H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 52H96" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 62H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 62H84" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><path d="M14 72H36" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round"/><path d="M44 72H100" stroke="#9db4d6" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/><rect x="14" y="88" width="18" height="11" rx="3" fill="#4e92df"/><rect x="36" y="88" width="18" height="11" rx="3" fill="#cde2fb"/><rect x="58" y="88" width="18" height="11" rx="3" fill="#7aaeea"/><rect x="80" y="88" width="18" height="11" rx="3" fill="#2a78d6"/><g transform="rotate(-14 84 122)"><g class="fa-stamp"><circle cx="84" cy="122" r="13" stroke="#0a5fd6" stroke-width="1.8"/><path d="M77 122H91" stroke="#0a5fd6" stroke-width="1.8" stroke-linecap="round"/></g></g></svg></div>
+        <div class="fa-leaf__shade"></div>
+      </div>
+    </div>
+    <p class="fa-caption">
+      <span class="fa-caption__a">Сверяем прогнозы с наблюдениями…</span>
+      <span class="fa-caption__b">Листаем журнал станций, почти готово…</span>
+    </p>
+  </div>`
 
 function statsMarkup() {
   const t = report.totals
@@ -873,7 +916,7 @@ root.addEventListener('change', (event) => {
 
 /** focusSelector — элемент, который получит фокус после перерисовки (кнопка выбранного периода). */
 async function load(focusSelector) {
-  renderSkeleton()
+  showJournal()
   try {
     const response = await fetch(`/api/audit?days=${period}`)
     const payload = await response.json()
@@ -890,6 +933,8 @@ async function load(focusSelector) {
         <span>${escape(cause.message)}</span>
       </p>`
     lucide.createIcons()
+  } finally {
+    hideJournal()
   }
 }
 
