@@ -49,6 +49,8 @@
 html {
   -webkit-text-size-adjust: 100%;
   color-scheme: light;
+  /* Ничто не должно расширять страницу вбок: телефон тогда уменьшает её целиком. */
+  overflow-x: clip;
 }
 
 body {
@@ -2430,6 +2432,17 @@ body::after {
  * таблицы — внутри своих панелей. Ширина 760px покрывает и планшеты в портрете.
  */
 @media (max-width: 760px) {
+  /*
+   * Плывущее небо шириной в шесть экранов на телефонах может растянуть страницу вбок:
+   * здесь фон неподвижен и ровно по экрану.
+   */
+  body::after {
+    right: 0;
+    width: auto;
+    background-size: cover;
+    animation: none;
+  }
+
   .topbar {
     padding: 0.5rem 0.5rem 0;
   }
